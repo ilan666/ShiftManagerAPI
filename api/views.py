@@ -58,8 +58,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
             day = shift_data.get('day')
             month = shift_data.get('month')
             year = shift_data.get('year')
-            if shift_data.get('morning_employee'):
-                morning_employee = Employee.objects.get(id=shift_data.get('morning_employee'))
+            if shift_data.get('morning_employee_id'):
+                morning_employee = Employee.objects.get(id=shift_data.get('morning_employee_id'))
                 try:
                     record = Shift.objects.get(day=day, month=month, year=year, shift_type=1)
                     record.employee = morning_employee
@@ -67,8 +67,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 except Shift.DoesNotExist:
                     Shift.objects.create(employee=morning_employee, day=day, month=month, year=year, shift_type=1)
 
-            if shift_data.get('evening_employee'):
-                evening_employee = Employee.objects.get(id=shift_data.get('evening_employee'))
+            if shift_data.get('evening_employee_id'):
+                evening_employee = Employee.objects.get(id=shift_data.get('evening_employee_id'))
                 try:
                     record = Shift.objects.get(day=day, month=month, year=year, shift_type=2)
                     record.employee = evening_employee
@@ -76,8 +76,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 except Shift.DoesNotExist:
                     Shift.objects.create(employee=evening_employee, day=day, month=month, year=year, shift_type=2)
 
-            if shift_data.get('night_employee'):
-                night_employee = Employee.objects.get(id=shift_data.get('night_employee'))
+            if shift_data.get('night_employee_id'):
+                night_employee = Employee.objects.get(id=shift_data.get('night_employee_id'))
                 try:
                     record = Shift.objects.get(day=day, month=month, year=year, shift_type=3)
                     record.employee = night_employee
@@ -122,7 +122,6 @@ class SwapRequestViewSet(viewsets.ModelViewSet):
         swap_request = self.get_object()
         response = request.data.get('is_approved')
         print(response)
-
         if not swap_request.is_user_approved:
             if response:
                 swap_request.is_user_approved = True
