@@ -20,7 +20,7 @@ class Employee(AbstractUser):
     date_joined = models.DateField(auto_now_add=True)
 
 class Shift(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT)
     day = models.IntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(31)])
     month = models.IntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(12)])
     year = models.IntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(9999)])
@@ -36,7 +36,7 @@ class ShiftSelection(models.Model):
     night = models.BooleanField(default=False)
 
 class SwapRequest(models.Model):
-    requesting_employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    requesting_employee = models.ForeignKey(Employee, on_delete=models.PROTECT)
     requested_employee_id = models.IntegerField(blank=True, null=True)
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
     is_user_approved = models.BooleanField(default=False)
