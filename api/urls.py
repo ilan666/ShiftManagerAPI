@@ -14,6 +14,7 @@ router.register('user-shifts-requests', ShiftSelectionViewSet)
 
 urlpatterns = [
      path('', include(router.urls)),
-     path('auth/google/connect/', views.google_calendar_init, name='google_connect'),
-     path('auth/google/callback/', views.google_callback, name='google_callback'),
+     path('google-calendar/init/', views.google_calendar_init, name='google_calendar_init'),
+     path('oauth2callback/', views.google_calendar_redirect, name='google_calendar_redirect'),
+     path('google-calendar/events/', views.list_events, name='list_events'),
 ]

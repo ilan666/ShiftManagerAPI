@@ -5,7 +5,6 @@ from rest_framework.response import Response
 
 from api.models import Employee, Shift, SwapRequest, ShiftSelection
 
-
 class EmployeeSerializer(serializers.ModelSerializer):
     pending_requests = serializers.SerializerMethodField(method_name='get_pending_requests')
     sent_requests = serializers.SerializerMethodField(method_name='get_sent_requests')

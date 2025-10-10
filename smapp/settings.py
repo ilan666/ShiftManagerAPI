@@ -30,6 +30,10 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
 ]
 
+GOOGLE_CLIENT_SECRETS_FILE = os.path.join(BASE_DIR, 'credentials.json')
+GOOGLE_API_SCOPES = ['https://www.googleapis.com/auth/calendar']
+REDIRECT_URI = 'https://ilanchik.pythonanywhere.com/oauth2callback'
+
 # Application definition
 
 INSTALLED_APPS = [

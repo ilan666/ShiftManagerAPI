@@ -1,17 +1,14 @@
-import json
-
+from httplib2 import Credentials
 from rest_framework import viewsets, status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.shortcuts import redirect
-from django.urls import reverse
 from google_auth_oauthlib.flow import Flow
-from django.http import JsonResponse
-from google.oauth2.credentials import Credentials
+from django.shortcuts import redirect
+from django.http import HttpResponse
+from django.conf import settings
 from googleapiclient.discovery import build
-import os
 
 from api.models import Employee, Shift, SwapRequest, ShiftSelection
 from api.serializers import EmployeeSerializer, ShiftSerializer, SwapRequestSerializer, ShiftSelectionSerializer, \
@@ -21,43 +18,52 @@ CREDENTIALS_PATH = '../smapp/credentials.json'
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 def google_calendar_init(request):
-    # Only authenticated users can connect Google Calendar
-    if not request.user.is_authenticated:
-        return redirect('')  # Or your login URL
-
-    # Setup OAuth flow
     flow = Flow.from_client_secrets_file(
-        CREDENTIALS_PATH,
-        scopes=SCOPES,
-        redirect_uri=request.build_absolute_uri(reverse('google_callback'))
+        settings.GOOGLE_CLIENT_SECRETS_FILE,
+        scopes=settings.GOOGLE_API_SCOPES,
+        redirect_uri=settings.REDIRECT_URI
     )
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true'
     )
 
-    # Save state in session
-    request.session['google_oauth_state'] = state
+    request.session['state'] = state
     return redirect(authorization_url)
 
-def google_callback(request):
-    state = request.session.get('google_oauth_state')
-    if not state:
-        return Response({'Message': 'Missing OAuth state'}, status.HTTP_400_BAD_REQUEST)
+def google_calendar_redirect(request):
+    state = request.session['state']
 
     flow = Flow.from_client_secrets_file(
-        CREDENTIALS_PATH,
-        scopes=SCOPES,
+        settings.GOOGLE_CLIENT_SECRETS_FILE,
+        scopes=settings.GOOGLE_API_SCOPES,
         state=state,
-        redirect_uri=request.build_absolute_uri(reverse('google_callback'))
+        redirect_uri=settings.REDIRECT_URI
     )
 
-    # Complete OAuth flow
-    flow.fetch_token(authorization_response=request.get_full_path())
+    flow.fetch_token(authorization_response=request.build_absolute_uri())
 
     credentials = flow.credentials
+    request.session['credentials'] = credentials_to_dict(credentials)
 
-    return credentials
+    return HttpResponse('Calendar integration complete. You can now use Google Calendar with your Django app.')
+
+def credentials_to_dict(credentials):
+    return {'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes}
+
+def list_events(request):
+    credentials = Credentials(**request.session['credentials'])
+    service = build('calendar', 'v3', credentials=credentials)
+
+    events_result = service.events().list(calendarId='primary', maxResults=10).execute()
+    events = events_result.get('items', [])
+
+    return HttpResponse(events)
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
@@ -95,7 +101,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(e)
             return Response({'Message': 'Could not update employee!'}, status.HTTP_400_BAD_REQUEST)
-
 
 class ShiftViewSet(viewsets.ModelViewSet):
     queryset = Shift.objects.all()
