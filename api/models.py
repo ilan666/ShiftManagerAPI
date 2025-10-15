@@ -41,3 +41,4 @@ class SwapRequest(models.Model):
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
     is_user_approved = models.BooleanField(default=False)
     is_admin_approved = models.BooleanField(default=False)
+    completed = models.BooleanField(default=False)

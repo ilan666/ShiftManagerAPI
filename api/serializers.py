@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 from rest_framework.authtoken.models import Token
@@ -12,7 +14,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
     processing_requests = serializers.SerializerMethodField(method_name='get_processing_requests')
     admin_requests = serializers.SerializerMethodField(method_name='get_admin_requests')
     shifts = serializers.SerializerMethodField(method_name='get_shifts')
-    selected_shifts = serializers.SerializerMethodField(method_name='get_selected_shifts')
 
     class Meta:
         model = Employee
@@ -26,11 +27,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
                   'permissions',
                   'pending_requests',
                   'sent_requests',
+                  'shifts',
+                  'admin_requests',
                   'completed_requests',
                   'processing_requests',
-                  'admin_requests',
-                  'shifts',
-                  'selected_shifts',
                   'password',)
         extra_kwargs = {'password': {'write_only': True, 'required': True}}
 
@@ -42,41 +42,34 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return employee
 
     def get_pending_requests(self, employee):
-        swap_requests = SwapRequest.objects.filter(requested_employee_id=employee.id, is_user_approved=False)
+        swap_requests = SwapRequest.objects.filter(requested_employee_id=employee.id, is_user_approved=False, completed=False)
         serializer = SwapRequestSerializer(swap_requests, many=True)
         return serializer.data
 
-    def get_shifts(self, employee):
-        shifts = Shift.objects.filter(employee=employee)
-        serializer = ShiftSerializer(shifts, many=True)
-        return serializer.data
-
     def get_sent_requests(self, employee):
-        swap_requests = SwapRequest.objects.filter(requesting_employee=employee, is_admin_approved=False)
+        swap_requests = SwapRequest.objects.filter(requesting_employee=employee)
         serializer = SwapRequestSerializer(swap_requests, many=True)
         return serializer.data
 
     def get_completed_requests(self, employee):
-        swap_requests = SwapRequest.objects.filter(requesting_employee=employee, is_user_approved=True, is_admin_approved=True)
+        swap_requests = SwapRequest.objects.filter(requesting_employee=employee, completed=True)
         serializer = SwapRequestSerializer(swap_requests, many=True)
-        return serializer.data
-
-    def get_admin_requests(self, employee):
-        if (employee.permissions == 'Admin'):
-            swap_requests = SwapRequest.objects.filter(is_user_approved=True, is_admin_approved=False)
-            serializer = SwapRequestSerializer(swap_requests, many=True)
-            return serializer.data
-        else:
-            return []
-
-    def get_selected_shifts(self, employee):
-        selected_shifts = ShiftSelection.objects.filter(employee=employee)
-        serializer = ShiftSelectionSerializer(selected_shifts, many=True)
         return serializer.data
 
     def get_processing_requests(self, employee):
-        swap_requests = SwapRequest.objects.filter(requesting_employee=employee, is_admin_approved=False)
+        swap_requests = SwapRequest.objects.filter(requesting_employee=employee, completed=False)
         serializer = SwapRequestSerializer(swap_requests, many=True)
+        return serializer.data
+
+    def get_shifts(self, employee):
+        current_year = datetime.now().year
+        shifts = Shift.objects.filter(employee=employee, year=current_year)
+        serializer = ShiftSerializer(shifts, many=True)
+        return serializer.data
+
+    def get_admin_requests(self, employee):
+        admin_requests = SwapRequest.objects.filter(is_admin_approved=False, completed=False)
+        serializer = SwapRequestSerializer(admin_requests, many=True)
         return serializer.data
 
 class ShiftSerializer(serializers.ModelSerializer):

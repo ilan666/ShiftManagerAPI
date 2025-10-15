@@ -65,7 +65,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'https://localhost:3000',
-    'https://shift-manager-client.web.app',
+    'https://shiftmanager-c8681-342bc.web.app',
 ]
 
 REST_FRAMEWORK = {

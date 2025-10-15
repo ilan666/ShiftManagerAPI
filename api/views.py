@@ -122,44 +122,38 @@ class ShiftViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        shifts_data = request.data.get('data')
-        month = shifts_data[0].get('month')
-        year = shifts_data[0].get('year')
+        day = request.data.get('day')
+        month = request.data.get('month')
+        year = request.data.get('year')
+        morningEmployee = ''
+        eveningEmployee = ''
+        nightEmployee = ''
+        if request.data.get('morning_employee_id') != -1:
+            morningEmployee = Employee.objects.get(id=request.data.get('morning_employee_id'))
+        if request.data.get('evening_employee_id') != -1:
+            eveningEmployee = Employee.objects.get(id=request.data.get('evening_employee_id'))
+        if request.data.get('night_employee_id') != -1:
+            nightEmployee = Employee.objects.get(id=request.data.get('night_employee_id'))
+        shifts = Shift.objects.filter(day=day, month=month, year=year)
 
-        Shift.objects.filter(month=month, year=year).delete()
+        if shifts:
+            for shift in shifts:
+                shift.delete()
 
-        for shift_data in shifts_data:
-            day = shift_data.get('day')
-            month = shift_data.get('month')
-            year = shift_data.get('year')
-            if shift_data.get('morning_employee_id'):
-                morning_employee = Employee.objects.get(id=shift_data.get('morning_employee_id'))
-                try:
-                    record = Shift.objects.get(day=day, month=month, year=year, shift_type=1)
-                    record.employee = morning_employee
-                    record.save()  # Save the changes
-                except Shift.DoesNotExist:
-                    Shift.objects.create(employee=morning_employee, day=day, month=month, year=year, shift_type=1)
+        if morningEmployee:
+            Shift.objects.create(employee=morningEmployee, day=day, month=month, year=year, shift_type=1)
 
-            if shift_data.get('evening_employee_id'):
-                evening_employee = Employee.objects.get(id=shift_data.get('evening_employee_id'))
-                try:
-                    record = Shift.objects.get(day=day, month=month, year=year, shift_type=2)
-                    record.employee = evening_employee
-                    record.save()  # Save the changes
-                except Shift.DoesNotExist:
-                    Shift.objects.create(employee=evening_employee, day=day, month=month, year=year, shift_type=2)
+        if eveningEmployee:
+            Shift.objects.create(employee=eveningEmployee, day=day, month=month, year=year, shift_type=2)
 
-            if shift_data.get('night_employee_id'):
-                night_employee = Employee.objects.get(id=shift_data.get('night_employee_id'))
-                try:
-                    record = Shift.objects.get(day=day, month=month, year=year, shift_type=3)
-                    record.employee = night_employee
-                    record.save()  # Save the changes
-                except Shift.DoesNotExist:
-                    Shift.objects.create(employee=night_employee, day=day, month=month, year=year, shift_type=3)
+        if nightEmployee:
+            Shift.objects.create(employee=nightEmployee, day=day, month=month, year=year, shift_type=3)
 
-        return Response({'Message': 'Shifts data uploaded!'}, status=status.HTTP_201_CREATED)
+        if not morningEmployee and not eveningEmployee and not nightEmployee:
+            return Response(status.HTTP_204_NO_CONTENT)
+
+        return Response(status.HTTP_200_OK)
+
 
 class SwapRequestViewSet(viewsets.ModelViewSet):
     queryset = SwapRequest.objects.all()
@@ -171,14 +165,14 @@ class SwapRequestViewSet(viewsets.ModelViewSet):
         requesting_employee = Employee.objects.get(id=request.data.get('requesting_employee_id'))
         requested_employee_id = request.data.get('requested_employee_id')
         shift = Shift.objects.get(id=request.data.get('shift_id'))
-        requesting_employee_requests = SwapRequest.objects.filter(requesting_employee=requesting_employee)
+        requesting_employee_requests = SwapRequest.objects.filter(requesting_employee=requesting_employee, completed=False)
 
         if requesting_employee_requests.count() == 5:
             print(requesting_employee_requests.count())
             return Response({'Message': 'Can not send more than 5 requests'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            swap_request, created = SwapRequest.objects.get_or_create(requesting_employee=requesting_employee, shift=shift)
+            swap_request, created = SwapRequest.objects.get_or_create(requesting_employee=requesting_employee, shift=shift, completed=False, is_user_approved=False)
             swap_request.requested_employee_id = requested_employee_id
             swap_request.save()
             serializer = SwapRequestSerializer(swap_request)
@@ -194,31 +188,52 @@ class SwapRequestViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         swap_request = self.get_object()
+        print(swap_request)
         approving = request.data.get('approving')
         response = request.data.get('is_approved')
         if approving == 'Employee':
-            swap_request.is_user_approved = response
+            if not response:
+                swap_request.is_user_approved = False
+                swap_request.completed = True
+                swap_request.save()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            swap_request.is_user_approved = True
             swap_request.save()
-            serializer = SwapRequestSerializer(swap_request)
-            return Response({serializer.data}, status=status.HTTP_200_OK)
+            return Response(status=status.HTTP_200_OK)
 
         if approving == 'Admin':
-                swap_request.is_admin_approved = response
+            if not response:
+                swap_request.is_admin_approved = False
+                swap_request.completed = True
                 swap_request.save()
+                return Response(status=status.HTTP_204_NO_CONTENT)
 
-                if response:
-                    try:
-                        requested_employee = Employee.objects.get(id=swap_request.requested_employee_id)
-                        shift = Shift.objects.get(id=swap_request.shift.id)
-                        shift.employee = requested_employee
-                        shift.save()
-                    except Exception as e:
-                        print(e)
-                        return Response({'Message': 'Error updating shift after approval'},
-                                        status=status.HTTP_400_BAD_REQUEST)
+            swap_request.is_admin_approved = True
+            swap_request.completed = True
+            swap_request.save()
 
-                serializer = SwapRequestSerializer(swap_request)
-                return Response({serializer.data}, status=status.HTTP_200_OK)
+            try:
+                requested_employee = Employee.objects.get(id=swap_request.requested_employee_id)
+                shift = Shift.objects.get(id=swap_request.shift.id)
+                shift.employee = requested_employee
+                shift.save()
+                return Response(status=status.HTTP_200_OK)
+            except Exception as e:
+                print(e)
+                return Response({'Message': 'Error updating shift after approval'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=False,
+        methods=['GET'],
+        permission_classes=[IsAuthenticated],
+        authentication_classes=[TokenAuthentication]
+    )
+    def get_admin_requests(self, request):
+        swap_requests = SwapRequest.objects.filter(is_user_approved=True, is_admin_approved=False, completed=False)
+        serializer = SwapRequestSerializer(swap_requests, many=True)
+        return Response(serializer.data)
 
 class ShiftSelectionViewSet(viewsets.ModelViewSet):
     queryset = ShiftSelection.objects.all()
@@ -227,37 +242,31 @@ class ShiftSelectionViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
 
     def create(self, request, *args, **kwargs):
-        shifts_data = request.data.get('data')
+        employee = Employee.objects.get(id=request.data.get('employee'))
+        day = request.data.get('day')
         month = request.data.get('month')
         year = request.data.get('year')
-        user = request.user
-        employee = Employee.objects.get(id=user.id)
+        morning = request.data.get('morning')
+        evening = request.data.get('evening')
+        night = request.data.get('night')
 
-        ShiftSelection.objects.filter(employee=employee, month=month, year=year).delete()
+        try:
+            existing = ShiftSelection.objects.get(employee=employee, day=day, month=month, year=year)
 
-        for shift_data in shifts_data:
-            employee = Employee.objects.get(id=shift_data.get('employee'))
-            day = shift_data.get('day')
-            month = shift_data.get('month')
-            year = shift_data.get('year')
-            morning = shift_data.get('morning')
-            evening = shift_data.get('evening')
-            night = shift_data.get('night')
+            if not morning and not evening and not night:
+                existing.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
 
-            try:
-                ShiftSelection.objects.create(employee=employee,
-                                              day=day,
-                                              month=month,
-                                              year=year,
-                                              morning=morning,
-                                              evening=evening,
-                                              night=night)
+            existing.morning = morning
+            existing.evening = evening
+            existing.night = night
+            existing.save()
+            return Response(status=status.HTTP_200_OK)
 
-            except Exception as e:
-                print(e)
-                return Response({'Message': 'Error creating shift request object...'}, status=status.HTTP_400_BAD_REQUEST)
+        except:
+            ShiftSelection.objects.create(employee=employee, day=day, month=month, year=year, morning=morning, evening=evening, night=night)
+            return Response(status=status.HTTP_201_CREATED)
 
-        return Response({'Message': 'Shifts data uploaded!'}, status=status.HTTP_201_CREATED)
 
     @action(detail=False,
             methods=['POST'],
@@ -268,6 +277,19 @@ class ShiftSelectionViewSet(viewsets.ModelViewSet):
         month = request.data.get('month')
         year = request.data.get('year')
         data = ShiftSelection.objects.filter(month=month, year=year)
+        serializer = ShiftSelectionSerializer(data, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False,
+            methods=['POST'],
+            permission_classes=[IsAuthenticated],
+            authentication_classes=[TokenAuthentication]
+            )
+    def get_user_data(self, request, *args, **kwargs):
+        employee = Employee.objects.get(id=request.user.id)
+        month = request.data.get('month')
+        year = request.data.get('year')
+        data = ShiftSelection.objects.filter(employee=employee, month=month, year=year)
         serializer = ShiftSelectionSerializer(data, many=True)
         return Response(serializer.data)
 
